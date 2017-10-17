@@ -16,6 +16,11 @@ import { FunctionApp } from '../shared/function-app';
 import { TreeViewInfo } from '../tree-view/models/tree-view-info';
 import { FunctionManageNode } from '../tree-view/function-node';
 import { BindingManager } from '../shared/models/binding-manager';
+import { FunctionGeneration } from '../shared/models/functions-version-info';
+import { ErrorIds } from './../shared/models/error-ids';
+import { ErrorType, ErrorEvent } from 'app/shared/models/error-event';
+import { BroadcastEvent } from 'app/shared/models/broadcast-event';
+import { BroadcastService } from './../shared/services/broadcast.service';
 
 @Component({
     selector: 'function-manage',
@@ -37,6 +42,7 @@ export class FunctionManageComponent {
     constructor(private _portalService: PortalService,
         private _globalStateService: GlobalStateService,
         private _translateService: TranslateService,
+        private _broadcastService: BroadcastService,
         configService: ConfigService) {
 
         this.isStandalone = configService.isStandalone();
@@ -63,19 +69,35 @@ export class FunctionManageComponent {
         this.functionStateValueChange = new Subject<boolean>();
         this.functionStateValueChange
             .switchMap(state => {
-                const originalState = this.functionInfo.config.disabled;
-                this._globalStateService.setBusyState();
                 this.functionInfo.config.disabled = state;
-                return this.functionApp.updateFunction(this.functionInfo).catch(() => { throw originalState; });
+                this._globalStateService.setBusyState();
+                this.functionInfo.config.disabled
+                    ? this._portalService.logAction('function-manage', 'disable')
+                    : this._portalService.logAction('function-manage', 'enable');
+                return this.functionApp.getRuntimeGeneration();
             })
-            .do(null, originalState => {
-                this.functionInfo.config.disabled = originalState;
+            .switchMap((gen: FunctionGeneration) => {
+                if (gen === FunctionGeneration.V2) {
+                    return this.functionApp.updateDisabledAppSettings([this.functionInfo]);
+                } else {
+                    return this.functionApp.updateFunction(this.functionInfo);
+                }
+            })
+            .do(null, (e) => {
+                this.functionInfo.config.disabled = !this.functionInfo.config.disabled;
                 this._globalStateService.clearBusyState();
+                this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
+                    message: this._translateService.instant(PortalResources.failedToSwitchFunctionState, 
+                        { state: !this.functionInfo.config.disabled, functionName: this.functionInfo.name }),
+                    errorId: ErrorIds.failedToSwitchEnabledFunction,
+                    errorType: ErrorType.UserError,
+                    resourceId: this.functionApp.site.id
+                });
+                console.error(e);
             })
             .retry()
-            .subscribe((fi: FunctionInfo) => {
+            .subscribe(() => {
                 this._globalStateService.clearBusyState();
-                this.functionInfo.config.disabled = fi.config.disabled;
             });
     }
 
@@ -87,7 +109,7 @@ export class FunctionManageComponent {
         const result = confirm(this._translateService.instant(PortalResources.functionManage_areYouSure, { name: this.functionInfo.name }));
         if (result) {
             this._globalStateService.setBusyState();
-            this._portalService.logAction('edit-component', 'delete');
+            this._portalService.logAction('function-manage', 'delete');
             // Clone node for removing as it can be change during http call
             const clone = Object.create(this._functionNode);
             this.functionApp.deleteFunction(this.functionInfo)

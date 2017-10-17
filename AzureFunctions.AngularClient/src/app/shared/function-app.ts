@@ -51,6 +51,7 @@ import { Site } from './models/arm/site';
 import { AuthSettings } from './models/auth-settings';
 import { FunctionAppEditMode } from './models/function-app-edit-mode';
 import { HostStatus } from './models/host-status';
+import { FunctionsVersionInfoHelper, FunctionGeneration} from './models/functions-version-info';
 
 import * as jsonschema from 'jsonschema';
 import { reachableInternalLoadBalancerApp } from '../shared/Utilities/internal-load-balancer';
@@ -238,7 +239,8 @@ export class FunctionApp {
     getFunctions() {
         let fcs: FunctionInfo[];
 
-        return this._cacheService.get(`${this._scmUrl}/api/functions`, false, this.getScmSiteHeaders())
+        return Observable.zip(
+            this._cacheService.get(`${this._scmUrl}/api/functions`, false, this.getScmSiteHeaders())
             .catch(() => this._http.get(`${this._scmUrl}/api/functions`, { headers: this.getScmSiteHeaders() }))
             .retryWhen(this.retryAntares)
             .map((r: Response) => {
@@ -262,22 +264,41 @@ export class FunctionApp {
                     });
                     return <FunctionInfo[]>[];
                 }
-            })
-            .do(() => this._broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.unableToRetrieveFunctionsList),
-            (error: FunctionsResponse) => {
-                if (!error.isHandled) {
-                    this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
-                        message: this._translateService.instant(PortalResources.error_unableToRetrieveFunctionListFromKudu),
-                        errorId: ErrorIds.unableToRetrieveFunctionsList,
-                        errorType: ErrorType.RuntimeError,
-                        resourceId: this.site.id
-                    });
-                    this.trackEvent(ErrorIds.unableToRetrieveFunctionsList, {
-                        content: error.text(),
-                        status: error.status.toString()
+            }),
+            this._cacheService.postArm(`${this.site.id}/config/appsettings/list`),
+            (functions, appSettings) => ({functions: functions, appSettings: appSettings.json()}))
+            .map(result => {
+            // For runtime 2.0 we use settings to dissable functions
+                const appSettings = result.appSettings as ArmObj<any>;
+                if (FunctionsVersionInfoHelper.getFuntionGeneration(appSettings.properties[Constants.runtimeVersionAppSettingName]) === FunctionGeneration.V2) {
+                    result.functions.forEach(f => {
+                        const disabledSetting = appSettings.properties[`${f.name}.Disabled`];
+                        if (disabledSetting && disabledSetting.toLocaleLowerCase() !== 'false') {
+                            f.config.disabled = true;
+                        } else if (disabledSetting && disabledSetting.toLocaleLowerCase() === 'false') {
+                            f.config.disabled = false;
+                        } else {
+                            delete f.config.disabled;
+                        }
                     });
                 }
-            });
+                return result.functions;
+            })
+            .do(() => this._broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.unableToRetrieveFunctionsList),
+                (error: FunctionsResponse) => {
+                    if (!error.isHandled) {
+                        this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
+                            message: this._translateService.instant(PortalResources.error_unableToRetrieveFunctionListFromKudu),
+                            errorId: ErrorIds.unableToRetrieveFunctionsList,
+                            errorType: ErrorType.RuntimeError,
+                            resourceId: this.site.id
+                        });
+                        this.trackEvent(ErrorIds.unableToRetrieveFunctionsList, {
+                            content: error.text(),
+                            status: error.status.toString()
+                        });
+                    }
+                });
 
     }
 
@@ -649,24 +670,32 @@ export class FunctionApp {
 
     @ClearCache('clearAllCachedData')
     deleteFunction(functionInfo: FunctionInfo) {
-        return this._http.delete(functionInfo.href, { headers: this.getScmSiteHeaders() })
-            .map(r => r.statusText)
-            .do(_ => this._broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.unableToDeleteFunction + functionInfo.name),
-            (error: FunctionsResponse) => {
-                if (!error.isHandled) {
-                    this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
-                        message: this._translateService.instant(PortalResources.error_unableToDeleteFunction, { functionName: functionInfo.name }),
-                        errorId: ErrorIds.unableToDeleteFunction + functionInfo.name,
-                        errorType: ErrorType.ApiError,
-                        resourceId: this.site.id
-                    });
-                    this.trackEvent(ErrorIds.unableToDeleteFunction, {
-                        content: error.text(),
-                        status: error.status.toString(),
-                        href: functionInfo.href
-                    });
-                }
-            });
+        return Observable.zip(
+            this._http.delete(functionInfo.href, { headers: this.getScmSiteHeaders() }),
+            this.getRuntimeGeneration()
+            .switchMap((gen: FunctionGeneration) => {
+                return (gen === FunctionGeneration.V2) ?
+                    this.updateDisabledAppSettings([functionInfo])
+                    : Observable.of(null);
+            }),
+            (r) => ({ error: r.statusText})
+        )
+        .do(_ => this._broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.unableToDeleteFunction + functionInfo.name),
+        (error: FunctionsResponse) => {
+             if (!error.isHandled) {
+                this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
+                    message: this._translateService.instant(PortalResources.error_unableToDeleteFunction, { functionName: functionInfo.name }),
+                    errorId: ErrorIds.unableToDeleteFunction + functionInfo.name,
+                    errorType: ErrorType.ApiError,
+                    resourceId: this.site.id
+                });
+                this.trackEvent(ErrorIds.unableToDeleteFunction, {
+                    content: error.text(),
+                    status: error.status.toString(),
+                    href: functionInfo.href
+                });
+            }
+        });
     }
 
     @Cache()
@@ -1925,6 +1954,36 @@ export class FunctionApp {
                     });
                     return this._cacheService.putArm(authSettings.id, this._armService.websiteApiVersion, authSettings);
                 });
+        } else {
+            return Observable.of(null);
+        }
+    }
+
+    getRuntimeGeneration(): Observable<FunctionGeneration> {
+        return this.getExtensionVersion().map(v => {
+            return FunctionsVersionInfoHelper.getFuntionGeneration(v);
+        });
+    }
+
+    updateDisabledAppSettings(infos: FunctionInfo[]): Observable<any> {
+        if (infos.length > 0) {
+            return this._cacheService.postArm(`${this.site.id}/config/appsettings/list`, true)
+            .flatMap(r => {
+                const appSettings: ArmObj<any> = r.json();
+                let needToUpdate = false;
+                infos.forEach(info => {
+                    const appSettingName = `${info.name}.Disabled`;
+                    if (info.config.disabled && (!appSettings.properties[appSettingName] || appSettings.properties[appSettingName] === 'false')) {
+                        appSettings.properties[appSettingName] = true;
+                        needToUpdate = true;
+                    } else if (appSettings.properties[appSettingName]) {
+                        delete appSettings.properties[appSettingName];
+                        needToUpdate = true;
+                    }
+                });
+
+                return needToUpdate ? this._cacheService.putArm(appSettings.id, this._armService.websiteApiVersion, appSettings) : Observable.of(null);
+            });
         } else {
             return Observable.of(null);
         }
