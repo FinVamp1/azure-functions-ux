@@ -4589,7 +4589,7 @@ namespace AzureFunctions.ResourcesPortal {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Web container.
+        ///   Looks up a localized string similar to Java web container.
         /// </summary>
         internal static string javaWebContainerLabel {
             get {
