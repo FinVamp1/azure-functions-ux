@@ -21,6 +21,7 @@ import { ErrorIds } from './../shared/models/error-ids';
 import { ErrorType, ErrorEvent } from 'app/shared/models/error-event';
 import { BroadcastEvent } from 'app/shared/models/broadcast-event';
 import { BroadcastService } from './../shared/services/broadcast.service';
+import { AiService } from './../shared/services/ai.service';
 
 @Component({
     selector: 'function-manage',
@@ -34,6 +35,7 @@ export class FunctionManageComponent {
     public functionApp: FunctionApp;
     public isStandalone: boolean;
     public isHttpFunction = false;
+    public gen: FunctionGeneration = null;
 
     private _viewInfoStream: Subject<TreeViewInfo<any>>;
     private _functionNode: FunctionManageNode;
@@ -43,19 +45,31 @@ export class FunctionManageComponent {
         private _globalStateService: GlobalStateService,
         private _translateService: TranslateService,
         private _broadcastService: BroadcastService,
-        configService: ConfigService) {
+        configService: ConfigService,
+        private _aiService: AiService) {
 
         this.isStandalone = configService.isStandalone();
 
         this._viewInfoStream = new Subject<TreeViewInfo<any>>();
         this._viewInfoStream
-            .retry()
-            .subscribe(viewInfo => {
+            .switchMap(viewInfo => {
+                this._globalStateService.setBusyState();
                 this._functionNode = <FunctionManageNode>viewInfo.node;
                 this.functionInfo = this._functionNode.functionInfo;
                 this.functionApp = this.functionInfo.functionApp;
                 this.isHttpFunction = BindingManager.isHttpFunction(this.functionInfo);
+                return this.functionApp.getRuntimeGeneration();
+            })
+            .do(null, e => {
+                this._aiService.trackException(e, '/errors/function-manage');
+                console.error(e);
+            })
+            .retry()
+            .subscribe((r: FunctionGeneration) => {
+                this._globalStateService.clearBusyState();
+                this.gen = r;
             });
+
 
         this.functionStatusOptions = [
             {
@@ -74,14 +88,8 @@ export class FunctionManageComponent {
                 this.functionInfo.config.disabled
                     ? this._portalService.logAction('function-manage', 'disable')
                     : this._portalService.logAction('function-manage', 'enable');
-                return this.functionApp.getRuntimeGeneration();
-            })
-            .switchMap((gen: FunctionGeneration) => {
-                if (gen === FunctionGeneration.V2) {
-                    return this.functionApp.updateDisabledAppSettings([this.functionInfo]);
-                } else {
-                    return this.functionApp.updateFunction(this.functionInfo);
-                }
+                return (this.gen === FunctionGeneration.V2) ? this.functionApp.updateDisabledAppSettings([this.functionInfo])
+                    : this.functionApp.updateFunction(this.functionInfo);
             })
             .do(null, (e) => {
                 this.functionInfo.config.disabled = !this.functionInfo.config.disabled;

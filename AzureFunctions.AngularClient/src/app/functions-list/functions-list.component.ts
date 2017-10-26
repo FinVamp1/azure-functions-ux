@@ -14,7 +14,9 @@ import { PortalResources } from '../shared/models/portal-resources';
 import { PortalService } from '../shared/services/portal.service';
 import { DashboardType } from '../tree-view/models/dashboard-type';
 import { ErrorType, ErrorEvent } from 'app/shared/models/error-event';
-gitkimport { FunctionGeneration } from '../shared/models/functions-version-info';
+import { FunctionGeneration } from '../shared/models/functions-version-info';
+import { Observable } from 'rxjs/Observable';
+import { AiService } from './../shared/services/ai.service';
 
 @Component({
     selector: 'functions-list',
@@ -26,6 +28,7 @@ export class FunctionsListComponent implements OnDestroy {
     public isLoading: boolean;
     public functionApp: FunctionApp;
     public appNode: AppNode;
+    public gen: FunctionGeneration;
 
     private _functionsNode: FunctionsNode;
     private _ngUnsubscribe = new Subject<void>();
@@ -33,7 +36,8 @@ export class FunctionsListComponent implements OnDestroy {
     constructor(private _globalStateService: GlobalStateService,
         private _portalService: PortalService,
         private _translateService: TranslateService,
-        private _broadcastService: BroadcastService
+        private _broadcastService: BroadcastService,
+        private _aiService: AiService
     ) {
         this._broadcastService.getEvents<TreeViewInfo<void>>(BroadcastEvent.FunctionsDashboard)
         .takeUntil(this._ngUnsubscribe)
@@ -44,9 +48,16 @@ export class FunctionsListComponent implements OnDestroy {
                 this._functionsNode = (<FunctionsNode>viewInfo.node);
                 this.appNode = (<AppNode>viewInfo.node.parent);
                 this.functionApp = this._functionsNode.functionApp;
-                return this._functionsNode.loadChildren();
+                return Observable.zip(this._functionsNode.loadChildren(), this.functionApp.getRuntimeGeneration(),
+                    (a, b) => ({ gen: b }));
             })
-            .subscribe(() => {
+            .do(null, e => {
+                this._aiService.trackException(e, '/errors/function-manage');
+                console.error(e);
+            })
+            .retry()
+            .subscribe((r) => {
+                this.gen = r.gen;
                 this.isLoading = false;
                 this.functions = (<FunctionNode[]>this._functionsNode.children);
             });
@@ -67,15 +78,10 @@ export class FunctionsListComponent implements OnDestroy {
             ? this._portalService.logAction('function-list', 'disable')
             : this._portalService.logAction('function-list', 'enable');
 
-        return this.functionApp.getRuntimeGeneration()
-        .switchMap((gen: FunctionGeneration) => {
-            if (gen === FunctionGeneration.V2) {
-                return this.functionApp.updateDisabledAppSettings([item.functionInfo]);
-            } else {
-                return this.functionApp.updateFunction(item.functionInfo)
-            }
-        })
-        .do(null, e => {
+        const observable = (this.gen === FunctionGeneration.V2) ? this.functionApp.updateDisabledAppSettings([item.functionInfo]):
+            this.functionApp.updateFunction(item.functionInfo);
+
+        return observable.do(null, e => {
             item.functionInfo.config.disabled = !item.functionInfo.config.disabled;
             const state = item.functionInfo.config.disabled ? this._translateService.instant(PortalResources.enable) : this._translateService.instant(PortalResources.disable);
             this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
