@@ -1258,6 +1258,15 @@ namespace AzureFunctions.ResourcesPortal {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to You can improve the performance of your stateless applications by turning off the Affinity Cookie, stateful applications should keep the Affinity Cookie turned on for increased compatibility. Click to learn more.
+        /// </summary>
+        internal static string clientAffinityInfoText {
+            get {
+                return ResourceManager.GetString("clientAffinityInfoText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         internal static string close {
@@ -5179,6 +5188,15 @@ namespace AzureFunctions.ResourcesPortal {
         internal static string pythonVersionLabelHelp {
             get {
                 return ResourceManager.GetString("pythonVersionLabelHelp", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to App Service supports installing newer versions of Python. Click here to learn more.
+        /// </summary>
+        internal static string pythonInfoText {
+            get {
+                return ResourceManager.GetString("pythonInfoText", resourceCulture);
             }
         }
         
