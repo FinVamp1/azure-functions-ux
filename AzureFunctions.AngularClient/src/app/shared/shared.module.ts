@@ -49,6 +49,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ArmService } from 'app/shared/services/arm.service';
 import { Url } from 'app/shared/Utilities/url';
 import { EmptyDashboardComponent } from 'app/main/empty-dashboard.component';
+import { LogMessageDirective } from 'app/shared/directives/log-message.directive';
 
 export function ArmServiceFactory(
     http: Http,
@@ -80,6 +81,7 @@ export function AiServiceFactory() {
         CommandComponent,
         CheckScenarioDirective,
         DynamicLoaderDirective,
+        LogMessageDirective,
         IsDirtyDirective,
         RadioSelectorComponent,
         PopOverComponent,
@@ -109,6 +111,7 @@ export function AiServiceFactory() {
         CommandComponent,
         CheckScenarioDirective,
         DynamicLoaderDirective,
+        LogMessageDirective,
         IsDirtyDirective,
         RadioSelectorComponent,
         PopOverComponent,

@@ -4,7 +4,7 @@ import { BroadcastEvent } from 'app/shared/models/broadcast-event';
 import { StoredSubscriptions } from './../shared/models/localStorage/local-storage';
 import { Dom } from './../shared/Utilities/dom';
 import { SearchBoxComponent } from './../search-box/search-box.component';
-import { Component, ViewChild, AfterViewInit, Input } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, Input, Injector } from '@angular/core';
 import { Http } from '@angular/http';
 import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
@@ -80,6 +80,7 @@ export class SideNavComponent implements AfterViewInit {
     }
 
     constructor(
+        public injector: Injector,
         public configService: ConfigService,
         public armService: ArmService,
         public cacheService: CacheService,

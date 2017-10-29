@@ -15,7 +15,8 @@ export enum BroadcastEvent {
     RefreshPortal,
     ClearError,
     OpenTab,
-    DirtyStateChange
+    DirtyStateChange,
+    UpdateAppsList
 }
 
 export interface DirtyStateEvent {

@@ -1,4 +1,3 @@
-import { DashboardType } from 'app/tree-view/models/dashboard-type';
 import { ActivatedRoute } from '@angular/router';
 import { BroadcastEvent } from 'app/shared/models/broadcast-event';
 import { BroadcastService } from 'app/shared/services/broadcast.service';
@@ -8,9 +7,7 @@ import { DropDownElement } from './../shared/models/drop-down-element';
 import { PortalResources } from './../shared/models/portal-resources';
 import { Component, OnDestroy, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs/Subject';
-import { AppsNode } from './../tree-view/apps-node';
 import { AppNode } from './../tree-view/app-node';
-import { TreeViewInfo, SiteData } from './../tree-view/models/tree-view-info';
 
 interface AppTableItem extends TableItem {
   title: string;
@@ -28,10 +25,10 @@ interface AppTableItem extends TableItem {
 export class AppsListComponent implements OnDestroy {
   public apps: AppNode[] = [];
   public tableItems: TableItem[] = [];
-  public appsNode: AppsNode;
+  // public appsNode: AppsNode;
   public Resources = PortalResources;
 
-  public initialized = false;
+  // public initialized = false;
 
   public allLocations = this.translateService.instant(PortalResources.allLocations);
   public numberLocations = this.translateService.instant(PortalResources.locationCount);
@@ -63,18 +60,26 @@ export class AppsListComponent implements OnDestroy {
     public broadcastService: BroadcastService,
     public route: ActivatedRoute) {
 
-    this.broadcastService.getEvents<TreeViewInfo<SiteData>>(BroadcastEvent.TreeNavigation)
-      .filter(viewInfo => viewInfo.dashboardType === DashboardType.AppsDashboard)
+    // this.broadcastService.getEvents<TreeViewInfo<SiteData>>(BroadcastEvent.TreeNavigation)
+    //   .filter(viewInfo => viewInfo.dashboardType === DashboardType.AppsDashboard)
+    //   .takeUntil(this._ngUnsubscribe)
+    //   .distinctUntilChanged()
+    //   .switchMap(viewInfo => {
+    //     this.appsNode = (<AppsNode>viewInfo.node);
+    //     this.initialized = false;
+    //     return (<AppsNode>viewInfo.node).childrenStream;
+    //   })
+
+    this.broadcastService.getEvents<AppNode[]>(BroadcastEvent.UpdateAppsList)
       .takeUntil(this._ngUnsubscribe)
       .distinctUntilChanged()
-      .switchMap(viewInfo => {
-        this.appsNode = (<AppsNode>viewInfo.node);
-        this.initialized = false;
-        return (<AppsNode>viewInfo.node).childrenStream;
-      })
       .subscribe(children => {
         this.apps = children;
-        this.initialized = true;
+        // this.initialized = true;
+        if(!this.apps){
+          return;
+        }
+
         this.tableItems = this.apps.map(app => (<AppTableItem>{
           title: app.title,
           subscription: app.subscription,

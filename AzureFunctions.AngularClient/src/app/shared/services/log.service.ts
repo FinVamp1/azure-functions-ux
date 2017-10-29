@@ -2,12 +2,14 @@ import { AiService } from 'app/shared/services/ai.service';
 import { Injectable } from '@angular/core';
 import { Url } from 'app/shared/Utilities/url';
 
-enum LogLevel {
+export enum LogLevel {
     error,
     warning,
     debug,
     verbose
 }
+
+export type LogLevelString = 'error' | 'warning' | 'debug' | 'verbose';
 
 @Injectable()
 export class LogService {
@@ -67,7 +69,7 @@ export class LogService {
         }
 
         if (this._shouldLog(category, LogLevel.debug)) {
-            console.log(`%c[${category}] - ${data}`, 'color: #0058ad');
+            console.log(`${this._getTime()} %c[${category}] - ${data}`, 'color: #0058ad');
         }
     }
 
@@ -78,6 +80,22 @@ export class LogService {
 
         if (this._shouldLog(category, LogLevel.verbose)) {
             console.log(`${this._getTime()} [${category}] - ${data}`);
+        }
+    }
+
+    public log(level: LogLevel, category: string, data: any, id?: string){
+        if(!id && (level === LogLevel.error || level === LogLevel.warning)){
+            throw Error('Error and Warning log levels require an id');
+        }
+
+        if(level === LogLevel.error){
+            this.error(category, id, data);
+        } else if(level === LogLevel.warning){
+            this.warn(category, id, data);
+        } else if(level === LogLevel.debug){
+            this.debug(category, data);
+        } else{
+            this.verbose(category, data);
         }
     }
 
