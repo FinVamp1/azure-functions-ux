@@ -25,10 +25,8 @@ interface AppTableItem extends TableItem {
 export class AppsListComponent implements OnDestroy {
   public apps: AppNode[] = [];
   public tableItems: TableItem[] = [];
-  // public appsNode: AppsNode;
   public Resources = PortalResources;
-
-  // public initialized = false;
+  public isLoading = true;
 
   public allLocations = this.translateService.instant(PortalResources.allLocations);
   public numberLocations = this.translateService.instant(PortalResources.locationCount);
@@ -60,25 +58,12 @@ export class AppsListComponent implements OnDestroy {
     public broadcastService: BroadcastService,
     public route: ActivatedRoute) {
 
-    // this.broadcastService.getEvents<TreeViewInfo<SiteData>>(BroadcastEvent.TreeNavigation)
-    //   .filter(viewInfo => viewInfo.dashboardType === DashboardType.AppsDashboard)
-    //   .takeUntil(this._ngUnsubscribe)
-    //   .distinctUntilChanged()
-    //   .switchMap(viewInfo => {
-    //     this.appsNode = (<AppsNode>viewInfo.node);
-    //     this.initialized = false;
-    //     return (<AppsNode>viewInfo.node).childrenStream;
-    //   })
-
     this.broadcastService.getEvents<AppNode[]>(BroadcastEvent.UpdateAppsList)
       .takeUntil(this._ngUnsubscribe)
       .distinctUntilChanged()
       .subscribe(children => {
-        this.apps = children;
-        // this.initialized = true;
-        if(!this.apps){
-          return;
-        }
+        this.isLoading = !children;
+        this.apps = children ? children : [];
 
         this.tableItems = this.apps.map(app => (<AppTableItem>{
           title: app.title,
@@ -126,6 +111,10 @@ export class AppsListComponent implements OnDestroy {
 
   onLocationsSelect(locations: string[]) {
     this.selectedLocations = locations;
+    if (!this.apps) {
+      return;
+    }
+
     const newItems = this.tableItems.filter(item => item.type === 'group');
     const filteredItems = this.apps.filter(app => this.selectedLocations.find(l => l === this.translateService.instant(app.location)))
       .filter(app => this.selectedResourceGroups.find(r => r === app.resourceGroup))
