@@ -19,7 +19,7 @@ import { UIResource, ITryAppServiceTemplate } from '../models/ui-resource';
 import { Cookie } from 'ng2-cookies/ng2-cookies';
 
 @Injectable()
-export class FunctionsService {
+export class TryFunctionsService {
     private token: string;
     private _scmUrl: string;
     public isEasyAuthEnabled: boolean;

@@ -28,7 +28,7 @@ import { AppNode } from '../tree-view/app-node';
 import { ArmService } from '../shared/services/arm.service';
 import { CacheService } from '../shared/services/cache.service';
 import { UserService } from '../shared/services/user.service';
-import { FunctionsService } from '../shared/services/functions.service';
+import { TryFunctionsService } from '../shared/services/try-functions.service';
 import { GlobalStateService } from '../shared/services/global-state.service';
 import { BroadcastService } from '../shared/services/broadcast.service';
 import { AiService } from '../shared/services/ai.service';
@@ -84,7 +84,7 @@ export class SideNavComponent implements AfterViewInit {
         public configService: ConfigService,
         public armService: ArmService,
         public cacheService: CacheService,
-        public functionsService: FunctionsService,
+        public functionsService: TryFunctionsService,
         public http: Http,
         public globalStateService: GlobalStateService,
         public broadcastService: BroadcastService,
@@ -240,6 +240,7 @@ export class SideNavComponent implements AfterViewInit {
                 }
 
                 this.selectedNode.dispose(newSelectedNode);
+                this.globalStateService.clearBusyState();
             }
         }
 

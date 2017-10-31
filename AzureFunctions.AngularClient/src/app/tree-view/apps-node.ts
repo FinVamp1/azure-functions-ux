@@ -160,7 +160,7 @@ export class AppsNode extends TreeNode implements MutableCollection, Disposable,
     public handleSelection(): Observable<any> {
         this.inSelectedTree = true;
         this.supportsRefresh = true;
-        return super.handleSelection();
+        return Observable.of(null);
     }
 
     public dispose() {

@@ -1,6 +1,11 @@
-import { SiteTabIds } from './../shared/models/constants';
+import { FunctionsService } from './../shared/services/functions-service';
+import { LogCategories } from 'app/shared/models/constants';
+import { LogService } from './../shared/services/log.service';
+import { CacheService } from './../shared/services/cache.service';
+import { ScenarioService } from './../shared/services/scenario/scenario.service';
+import { SiteTabIds, ScenarioIds } from './../shared/models/constants';
 import { SiteService } from './../shared/services/slots.service';
-import { Response } from '@angular/http';
+// import { Response } from '@angular/http';
 import { Observable } from 'rxjs/Observable';
 import { Subscription as RxSubscription } from 'rxjs/Subscription';
 import { ReplaySubject } from 'rxjs/ReplaySubject';
@@ -16,9 +21,8 @@ import 'rxjs/add/observable/timer';
 import 'rxjs/add/observable/zip';
 
 import { PortalResources } from './../shared/models/portal-resources';
-import { ErrorIds } from './../shared/models/error-ids';
-import { AuthzService } from './../shared/services/authz.service';
-import { TopBarNotification } from './../top-bar/top-bar-models';
+// import { ErrorIds } from './../shared/models/error-ids';
+// import { TopBarNotification } from './../top-bar/top-bar-models';
 import { ArmObj } from './../shared/models/arm/arm-obj';
 import { Subscription } from './../shared/models/subscription';
 import { SiteDescriptor } from './../shared/resourceDescriptors';
@@ -31,11 +35,11 @@ import { SlotsNode } from './slots-node';
 import { FunctionsNode } from './functions-node';
 import { ProxiesNode } from './proxies-node';
 import { FunctionApp } from '../shared/function-app';
-import { Constants, NotificationIds } from '../shared/models/constants';
-import { BroadcastEvent } from '../shared/models/broadcast-event';
-import { ErrorEvent, ErrorType } from '../shared/models/error-event';
-import { FunctionsVersionInfoHelper } from '../../../../common/models/functions-version-info';
-import { ArmUtil } from 'app/shared/Utilities/arm-utils';
+// import { Constants, NotificationIds } from '../shared/models/constants';
+// import { BroadcastEvent } from '../shared/models/broadcast-event';
+// import { ErrorEvent, ErrorType } from '../shared/models/error-event';
+// import { FunctionsVersionInfoHelper } from '../../../../common/models/functions-version-info';
+// import { ArmUtil } from 'app/shared/Utilities/arm-utils';
 
 export class AppNode extends TreeNode
     implements Disposable, Removable, CustomSelection, Collection, Refreshable, CanBlockNavChange {
@@ -65,12 +69,22 @@ export class AppNode extends TreeNode
     private _pollingTask: RxSubscription;
     private _loadingObservable: Observable<any>;
 
+    private _functionsService: FunctionsService;
+    private _scenarioService: ScenarioService;
+    private _cacheService: CacheService;
+    private _logService: LogService;
+
     constructor(sideBar: SideNavComponent,
         private _siteArmCacheObj: ArmObj<Site>,
         parentNode: TreeNode,
         private _subscriptions: Subscription[],
         disabled?: boolean) {
         super(sideBar, _siteArmCacheObj.id, parentNode);
+
+        this._functionsService = this.sideNav.injector.get(FunctionsService);
+        this._scenarioService = this.sideNav.injector.get(ScenarioService);
+        this._cacheService = this.sideNav.injector.get(CacheService);
+        this._logService = this.sideNav.injector.get(LogService);
 
         this.disabled = !!disabled;
         if (disabled) {
@@ -93,86 +107,111 @@ export class AppNode extends TreeNode
         this.subscriptionId = sub && sub.subscriptionId;
     }
 
-    public handleSelection(): Observable<any> {
-        if (!this.disabled) {
-            return this.initialize(false);
-        }
+    // public handleSelection(): Observable<any> {
 
-        return Observable.of({});
-    }
+
+    //     return Observable.of({});
+    // }
 
     public loadChildren() {
-        if (!this.disabled) {
-            return this.initialize(true);
-        }
 
-        return Observable.of({});
+        this.isLoading = true;
+        return this._functionsService.getAppContext(this.resourceId)
+            .do(context => {
+                this.isLoading = false;
+
+                const children = [
+                    new FunctionsNode(this.sideNav, context, this),
+                    new ProxiesNode(this.sideNav, null, this),
+                    new SlotsNode(this.sideNav, this._subscriptions, this._siteArmCacheObj, this)
+                ];
+
+                const filteredChildren = this._scenarioService.checkScenario(ScenarioIds.filterAppNodeChildren, {
+                    site: context.site,
+                    appNodeChildren: children
+                });
+
+                this.children = filteredChildren && filteredChildren.data ? filteredChildren.data : children;
+                this.children.forEach(c => {
+                    if (c.dashboardType === DashboardType.FunctionsDashboard) {
+                        c.toggle(null);
+                    }
+                });
+
+            }, err => {
+                this.isLoading = false;
+                this._logService.error(LogCategories.SideNav, '/app-node/loadChildren', err);
+            });
+
+        // return Observable.of({});
     }
 
     public initialize(expandOnly?: boolean): Observable<any> {
 
-        if (!expandOnly) {
-            this.inSelectedTree = true;
-        }
+        return Observable.of({});
 
-        this.supportsRefresh = false;
-        this.isLoading = true;
+        // if (!expandOnly) {
+        //     this.inSelectedTree = true;
+        // }
 
-        if (this._loadingObservable) {
-            return this._loadingObservable;
-        }
+        // this.supportsRefresh = false;
+        // this.isLoading = true;
 
-        this._loadingObservable = Observable.zip(
-            this.sideNav.authZService.hasPermission(this._siteArmCacheObj.id, [AuthzService.writeScope]),
-            this.sideNav.authZService.hasReadOnlyLock(this._siteArmCacheObj.id),
-            this.sideNav.cacheService.getArm(this._siteArmCacheObj.id),
+        // if (this._loadingObservable) {
+        //     return this._loadingObservable;
+        // }
 
-            (h, r, s) => ({ hasWritePermission: h, hasReadOnlyLock: r, siteResponse: s })
-        )
-            .mergeMap(r => {
-                const site: ArmObj<Site> = r.siteResponse.json();
+        // this._loadingObservable = Observable.zip(
+        //     this.sideNav.authZService.hasPermission(this._siteArmCacheObj.id, [AuthzService.writeScope]),
+        //     this.sideNav.authZService.hasReadOnlyLock(this._siteArmCacheObj.id),
+        //     this.sideNav.cacheService.getArm(this._siteArmCacheObj.id),
 
-                if (!this._functionApp) {
-                    return this._setupFunctionApp(site)
-                        .mergeMap(() => {
-                            if (site.properties.state === 'Running' && r.hasWritePermission && !r.hasReadOnlyLock) {
-                                return this._setupBackgroundTasks()
-                                    .map(() => {
-                                        this.supportsRefresh = true;
-                                    });
-                            } else {
-                                this.dispose();
-                                this.supportsRefresh = true;
-                                return Observable.of(null);
-                            }
-                        });
-                }
+        //     (h, r, s) => ({ hasWritePermission: h, hasReadOnlyLock: r, siteResponse: s })
+        // )
+        //     .mergeMap(r => {
+        //         const site: ArmObj<Site> = r.siteResponse.json();
 
-                this.supportsRefresh = true;
-                return Observable.of(null);
-            })
-            .do(() => {
-                // Temporary workaround to make sure we clear loading
-                // https://github.com/Azure/azure-functions-ux/issues/1872
-                setTimeout(() => {
-                    this.isLoading = false;
-                });
+        //         if (!this._functionApp) {
+        //             return this._setupFunctionApp(site)
+        //                 .mergeMap(() => {
+        //                     if (site.properties.state === 'Running' && r.hasWritePermission && !r.hasReadOnlyLock) {
+        //                         return this._setupBackgroundTasks()
+        //                             .map(() => {
+        //                                 this.supportsRefresh = true;
+        //                             });
+        //                     } else {
+        //                         this.dispose();
+        //                         this.supportsRefresh = true;
+        //                         return Observable.of(null);
+        //                     }
+        //                 });
+        //         }
 
-                if (this.inSelectedTree) {
-                    this.children.forEach(c => c.inSelectedTree = true);
-                }
+        //         this.supportsRefresh = true;
+        //         return Observable.of(null);
+        //     })
+        //     .do(() => {
+        //         // Temporary workaround to make sure we clear loading
+        //         // https://github.com/Azure/azure-functions-ux/issues/1872
+        //         setTimeout(() => {
+        //             this.isLoading = false;
+        //         });
 
-                this._loadingObservable = null;
-            }, () => {
-                // Temporary workaround to make sure we clear loading
-                // https://github.com/Azure/azure-functions-ux/issues/1872
-                setTimeout(() => {
-                    this.isLoading = false;
-                });
-            })
-            .share();
+        //         if (this.inSelectedTree) {
+        //             this.children.forEach(c => c.inSelectedTree = true);
+        //         }
 
-        return this._loadingObservable;
+        //         this._loadingObservable = null;
+        //     }, () => {
+        //         // Temporary workaround to make sure we clear loading
+        //         // https://github.com/Azure/azure-functions-ux/issues/1872
+        //         setTimeout(() => {
+        //             this.isLoading = false;
+        //         });
+        //     })
+        //     .share();
+
+        // return this._loadingObservable;
     }
 
     public shouldBlockNavChange() {
@@ -192,64 +231,64 @@ export class AppNode extends TreeNode
         return !canSwitchNodes;
     }
 
-    private _setupFunctionApp(site: ArmObj<Site>) {
-        let result = Observable.of(null);
+    // private _setupFunctionApp(site: ArmObj<Site>) {
+    //     let result = Observable.of(null);
 
-        if (this.sideNav.tryFunctionApp) {
-            this._functionApp = this.sideNav.tryFunctionApp;
+    // if (this.sideNav.tryFunctionApp) {
+    //     this._functionApp = this.sideNav.tryFunctionApp;
 
-            const functionsNode = new FunctionsNode(this.sideNav, this._functionApp, this);
-            functionsNode.toggle(null);
-            this.children = [functionsNode];
-        } else {
-            this._functionApp = new FunctionApp(
-                site,
-                this.sideNav.http,
-                this.sideNav.userService,
-                this.sideNav.globalStateService,
-                this.sideNav.translateService,
-                this.sideNav.broadcastService,
-                this.sideNav.armService,
-                this.sideNav.cacheService,
-                this.sideNav.languageService,
-                this.sideNav.authZService,
-                this.sideNav.aiService,
-                this.sideNav.configService,
-                this.sideNav.slotsService
-            );
+    //     const functionsNode = new FunctionsNode(this.sideNav, this._functionApp, this);
+    //     functionsNode.toggle(null);
+    //     this.children = [functionsNode];
+    // } else {
+    //     this._functionApp = new FunctionApp(
+    //         site,
+    //         this.sideNav.http,
+    //         this.sideNav.userService,
+    //         this.sideNav.globalStateService,
+    //         this.sideNav.translateService,
+    //         this.sideNav.broadcastService,
+    //         this.sideNav.armService,
+    //         this.sideNav.cacheService,
+    //         this.sideNav.languageService,
+    //         this.sideNav.authZService,
+    //         this.sideNav.aiService,
+    //         this.sideNav.configService,
+    //         this.sideNav.slotsService
+    //     );
 
-            const postFunctionApp = () => {
-                this.functionAppStream.next(this._functionApp);
+    //     const postFunctionApp = () => {
+    //         this.functionAppStream.next(this._functionApp);
 
-                const functionsNode = new FunctionsNode(this.sideNav, this._functionApp, this);
-                functionsNode.toggle(null);
-                this.children = [functionsNode];
+    //         const functionsNode = new FunctionsNode(this.sideNav, this._functionApp, this);
+    //         functionsNode.toggle(null);
+    //         this.children = [functionsNode];
 
-                if (!this.sideNav.configService.isStandalone()) {
-                    const proxiesNode = new ProxiesNode(this.sideNav, this._functionApp, this);
-                    const slotsNode = new SlotsNode(this.sideNav, this._subscriptions, this._siteArmCacheObj, this);
-                    proxiesNode.toggle(null);
-                    // Do not auto expand slotsNode
-                    // for slots Node hide the slots as child Node
-                    if (this.isSlot) {
-                        this.supportsScope = false;
-                        this.children.push(proxiesNode);
-                    } else {
-                        this.supportsScope = true;
-                        this.children.push(proxiesNode, slotsNode);
-                    }
-                }
-            };
+    //         if (!this.sideNav.configService.isStandalone()) {
+    //             const proxiesNode = new ProxiesNode(this.sideNav, this._functionApp, this);
+    //             const slotsNode = new SlotsNode(this.sideNav, this._subscriptions, this._siteArmCacheObj, this);
+    //             proxiesNode.toggle(null);
+    //             // Do not auto expand slotsNode
+    //             // for slots Node hide the slots as child Node
+    //             if (this.isSlot) {
+    //                 this.supportsScope = false;
+    //                 this.children.push(proxiesNode);
+    //             } else {
+    //                 this.supportsScope = true;
+    //                 this.children.push(proxiesNode, slotsNode);
+    //             }
+    //         }
+    //     };
 
-            if (ArmUtil.isLinuxApp(this._functionApp.site)) {
-                result = this._functionApp.getHostSecretsFromScm().do(() => postFunctionApp());
-            } else {
-                postFunctionApp();
-            }
-        }
+    //     if (ArmUtil.isLinuxApp(this._functionApp.site)) {
+    //         result = this._functionApp.getHostSecretsFromScm().do(() => postFunctionApp());
+    //     } else {
+    //         postFunctionApp();
+    //     }
+    // }
 
-        return result;
-    }
+    //     return result;
+    // }
 
     public handleRefresh(): Observable<any> {
         if (this.sideNav.selectedNode.shouldBlockNavChange()) {
@@ -343,126 +382,126 @@ export class AppNode extends TreeNode
         this.sideNav.broadcastService.clearAllDirtyStates();
     }
 
-    private _setupBackgroundTasks() {
+    // private _setupBackgroundTasks() {
 
-        return this._functionApp.initKeysAndWarmupMainSite()
-            .catch(() => Observable.of(null))
-            .map(() => {
+    //     return this._functionApp.initKeysAndWarmupMainSite()
+    //         .catch(() => Observable.of(null))
+    //         .map(() => {
 
-                if (!this._pollingTask) {
+    //             if (!this._pollingTask) {
 
-                    this._pollingTask = Observable.timer(1, 60000)
-                        .concatMap(() => {
-                            const val = Observable.zip(
-                                this._functionApp.getHostErrors().catch(() => Observable.of([])),
-                                this.sideNav.cacheService.getArm(`${this.resourceId}/config/web`, true),
-                                this.sideNav.cacheService.postArm(`${this.resourceId}/config/appsettings/list`, true),
-                                this.sideNav.slotsService.getSlotsList(`${this.resourceId}`),
-                                this._functionApp.pingScmSite(),
-                                (e: string[], c: Response, a: Response, s: ArmObj<Site>[]) => ({ errors: e, configResponse: c, appSettingResponse: a, slotsResponse: s }));
-                            return val;
-                        })
-                        .catch(() => Observable.of({}))
-                        .subscribe((result: { errors: string[], configResponse: Response, appSettingResponse: Response, slotsResponse: ArmObj<Site>[] }) => {
-                            this._handlePollingTaskResult(result);
-                        });
-                }
-            });
-    }
+    //                 this._pollingTask = Observable.timer(1, 60000)
+    //                     .concatMap(() => {
+    //                         const val = Observable.zip(
+    //                             this._functionApp.getHostErrors().catch(() => Observable.of([])),
+    //                             this.sideNav.cacheService.getArm(`${this.resourceId}/config/web`, true),
+    //                             this.sideNav.cacheService.postArm(`${this.resourceId}/config/appsettings/list`, true),
+    //                             this.sideNav.slotsService.getSlotsList(`${this.resourceId}`),
+    //                             this._functionApp.pingScmSite(),
+    //                             (e: string[], c: Response, a: Response, s: ArmObj<Site>[]) => ({ errors: e, configResponse: c, appSettingResponse: a, slotsResponse: s }));
+    //                         return val;
+    //                     })
+    //                     .catch(() => Observable.of({}))
+    //                     .subscribe((result: { errors: string[], configResponse: Response, appSettingResponse: Response, slotsResponse: ArmObj<Site>[] }) => {
+    //                         this._handlePollingTaskResult(result);
+    //                     });
+    //             }
+    //         });
+    // }
 
-    private _handlePollingTaskResult(result: { errors: string[], configResponse: Response, appSettingResponse: Response, slotsResponse: ArmObj<Site>[] }) {
-        if (result) {
+    // private _handlePollingTaskResult(result: { errors: string[], configResponse: Response, appSettingResponse: Response, slotsResponse: ArmObj<Site>[] }) {
+    //     if (result) {
 
-            const notifications: TopBarNotification[] = [];
+    //         const notifications: TopBarNotification[] = [];
 
-            if (result.errors) {
+    //         if (result.errors) {
 
-                this.sideNav.broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.generalHostErrorFromHost);
-                // Give clearing a chance to run
-                setTimeout(() => {
-                    result.errors.forEach(e => {
-                        this.sideNav.broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
-                            message: this.sideNav.translateService.instant(PortalResources.functionDev_hostErrorMessage, { error: e }),
-                            details: this.sideNav.translateService.instant(PortalResources.functionDev_hostErrorMessage, { error: e }),
-                            errorId: ErrorIds.generalHostErrorFromHost,
-                            errorType: ErrorType.RuntimeError,
-                            resourceId: this._functionApp.site.id
-                        });
-                        this.sideNav.aiService.trackEvent('/errors/host', { error: e, app: this.resourceId });
-                    });
-                });
-            }
+    //             this.sideNav.broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.generalHostErrorFromHost);
+    //             // Give clearing a chance to run
+    //             setTimeout(() => {
+    //                 result.errors.forEach(e => {
+    //                     this.sideNav.broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
+    //                         message: this.sideNav.translateService.instant(PortalResources.functionDev_hostErrorMessage, { error: e }),
+    //                         details: this.sideNav.translateService.instant(PortalResources.functionDev_hostErrorMessage, { error: e }),
+    //                         errorId: ErrorIds.generalHostErrorFromHost,
+    //                         errorType: ErrorType.RuntimeError,
+    //                         resourceId: this._functionApp.site.id
+    //                     });
+    //                     this.sideNav.aiService.trackEvent('/errors/host', { error: e, app: this.resourceId });
+    //                 });
+    //             });
+    //         }
 
-            if (result.configResponse) {
-                const config = result.configResponse.json();
-                this._functionApp.isAlwaysOn = config.properties.alwaysOn === true || this._functionApp.site.properties.sku === 'Dynamic';
+    //         if (result.configResponse) {
+    //             const config = result.configResponse.json();
+    //             this._functionApp.isAlwaysOn = config.properties.alwaysOn === true || this._functionApp.site.properties.sku === 'Dynamic';
 
-                if (!this._functionApp.isAlwaysOn) {
-                    notifications.push({
-                        id: NotificationIds.alwaysOn,
-                        message: this.sideNav.translateService.instant(PortalResources.topBar_alwaysOn),
-                        iconClass: 'fa fa-exclamation-triangle warning',
-                        learnMoreLink: 'https://go.microsoft.com/fwlink/?linkid=830855',
-                        clickCallback: null
-                    });
-                }
-            }
+    //             if (!this._functionApp.isAlwaysOn) {
+    //                 notifications.push({
+    //                     id: NotificationIds.alwaysOn,
+    //                     message: this.sideNav.translateService.instant(PortalResources.topBar_alwaysOn),
+    //                     iconClass: 'fa fa-exclamation-triangle warning',
+    //                     learnMoreLink: 'https://go.microsoft.com/fwlink/?linkid=830855',
+    //                     clickCallback: null
+    //                 });
+    //             }
+    //         }
 
-            if (result.appSettingResponse) {
-                const appSettings: ArmObj<any> = result.appSettingResponse.json();
-                const extensionVersion = appSettings.properties[Constants.runtimeVersionAppSettingName];
-                let isLatestFunctionRuntime = null;
-                if (extensionVersion) {
-                    if (extensionVersion === 'beta') {
-                        isLatestFunctionRuntime = true;
-                        notifications.push({
-                            id: NotificationIds.runtimeV2,
-                            message: this.sideNav.translateService.instant(PortalResources.topBar_runtimeV2),
-                            iconClass: 'fa fa-exclamation-triangle warning',
-                            learnMoreLink: '',
-                            clickCallback: () => {
-                                this.openSettings();
-                            }
-                        });
-                    } else {
-                        isLatestFunctionRuntime = !FunctionsVersionInfoHelper.needToUpdateRuntime(this.sideNav.configService.FunctionsVersionInfo, extensionVersion);
-                        this.sideNav.aiService.trackEvent('/values/runtime_version', { runtime: extensionVersion, appName: this.resourceId });
-                    }
-                }
+    //         if (result.appSettingResponse) {
+    //             const appSettings: ArmObj<any> = result.appSettingResponse.json();
+    //             const extensionVersion = appSettings.properties[Constants.runtimeVersionAppSettingName];
+    //             let isLatestFunctionRuntime = null;
+    //             if (extensionVersion) {
+    //                 if (extensionVersion === 'beta') {
+    //                     isLatestFunctionRuntime = true;
+    //                     notifications.push({
+    //                         id: NotificationIds.runtimeV2,
+    //                         message: this.sideNav.translateService.instant(PortalResources.topBar_runtimeV2),
+    //                         iconClass: 'fa fa-exclamation-triangle warning',
+    //                         learnMoreLink: '',
+    //                         clickCallback: () => {
+    //                             this.openSettings();
+    //                         }
+    //                     });
+    //                 } else {
+    //                     isLatestFunctionRuntime = !FunctionsVersionInfoHelper.needToUpdateRuntime(this.sideNav.configService.FunctionsVersionInfo, extensionVersion);
+    //                     this.sideNav.aiService.trackEvent('/values/runtime_version', { runtime: extensionVersion, appName: this.resourceId });
+    //                 }
+    //             }
 
-                if (!isLatestFunctionRuntime) {
-                    notifications.push({
-                        id: NotificationIds.newRuntimeVersion,
-                        message: this.sideNav.translateService.instant(PortalResources.topBar_newVersion),
-                        iconClass: 'fa fa-info link',
-                        learnMoreLink: 'https://go.microsoft.com/fwlink/?linkid=829530',
-                        clickCallback: () => {
-                            this.openSettings();
-                        }
-                    });
-                }
-                if (result.slotsResponse) {
-                    let slotsStorageSetting = appSettings.properties[Constants.slotsSecretStorageSettingsName];
-                    if (!!slotsStorageSetting) {
-                        slotsStorageSetting = slotsStorageSetting.toLowerCase();
-                    }
-                    const numSlots = result.slotsResponse.length;
-                    if (numSlots > 0 && slotsStorageSetting !== Constants.slotsSecretStorageSettingsValue.toLowerCase()) {
-                        notifications.push({
-                            id: NotificationIds.slotsHostId,
-                            message: this.sideNav.translateService.instant(PortalResources.topBar_slotsHostId),
-                            iconClass: 'fa fa-exclamation-triangle warning',
-                            learnMoreLink: '',
-                            clickCallback: null
-                        });
-                    }
-                }
+    //             if (!isLatestFunctionRuntime) {
+    //                 notifications.push({
+    //                     id: NotificationIds.newRuntimeVersion,
+    //                     message: this.sideNav.translateService.instant(PortalResources.topBar_newVersion),
+    //                     iconClass: 'fa fa-info link',
+    //                     learnMoreLink: 'https://go.microsoft.com/fwlink/?linkid=829530',
+    //                     clickCallback: () => {
+    //                         this.openSettings();
+    //                     }
+    //                 });
+    //             }
+    //             if (result.slotsResponse) {
+    //                 let slotsStorageSetting = appSettings.properties[Constants.slotsSecretStorageSettingsName];
+    //                 if (!!slotsStorageSetting) {
+    //                     slotsStorageSetting = slotsStorageSetting.toLowerCase();
+    //                 }
+    //                 const numSlots = result.slotsResponse.length;
+    //                 if (numSlots > 0 && slotsStorageSetting !== Constants.slotsSecretStorageSettingsValue.toLowerCase()) {
+    //                     notifications.push({
+    //                         id: NotificationIds.slotsHostId,
+    //                         message: this.sideNav.translateService.instant(PortalResources.topBar_slotsHostId),
+    //                         iconClass: 'fa fa-exclamation-triangle warning',
+    //                         learnMoreLink: '',
+    //                         clickCallback: null
+    //                     });
+    //                 }
+    //             }
 
-            }
+    //         }
 
-            this.sideNav.globalStateService.setTopBarNotifications(notifications);
-        }
-    }
+    //         this.sideNav.globalStateService.setTopBarNotifications(notifications);
+    //     }
+    // }
 }
 
 /*

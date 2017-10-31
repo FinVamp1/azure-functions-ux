@@ -1,9 +1,11 @@
+import { SiteDescriptor } from 'app/shared/resourceDescriptors';
+import { FunctionsService } from './../shared/services/functions-service';
 import { DashboardType } from 'app/tree-view/models/dashboard-type';
 import { ErrorIds } from './../shared/models/error-ids';
 import { BroadcastEvent } from 'app/shared/models/broadcast-event';
 import { BroadcastService } from './../shared/services/broadcast.service';
 import { AppNode } from './../tree-view/app-node';
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, Injector } from '@angular/core';
 import { Subject } from 'rxjs/Subject';
 import { FunctionNode } from './../tree-view/function-node';
 import { FunctionsNode } from './../tree-view/functions-node';
@@ -32,17 +34,23 @@ export class FunctionsListComponent implements OnDestroy {
     constructor(private _globalStateService: GlobalStateService,
         private _portalService: PortalService,
         private _translateService: TranslateService,
-        private _broadcastService: BroadcastService
-    ) {
+        private _broadcastService: BroadcastService,
+        private _functionsService: FunctionsService,
+        private _injector: Injector) {
+
         this._broadcastService.getEvents<TreeViewInfo<void>>(BroadcastEvent.TreeNavigation)
             .filter(viewInfo => viewInfo.dashboardType === DashboardType.FunctionsDashboard)
             .takeUntil(this._ngUnsubscribe)
             .distinctUntilChanged()
-            .switchMap(viewInfo => {
+            .switchMap(viewInfo =>{
                 this.isLoading = true;
                 this._functionsNode = (<FunctionsNode>viewInfo.node);
                 this.appNode = (<AppNode>viewInfo.node.parent);
-                this.functionApp = this._functionsNode.functionApp;
+                const descriptor = new SiteDescriptor(viewInfo.resourceId);
+                return this._functionsService.getAppContext(descriptor.getResourceId());
+            })
+            .switchMap(context => {
+                this.functionApp = new FunctionApp(context.site, this._injector);
                 return this._functionsNode.loadChildren();
             })
             .subscribe(() => {
@@ -53,6 +61,7 @@ export class FunctionsListComponent implements OnDestroy {
 
     ngOnDestroy(): void {
         this._ngUnsubscribe.next();
+        this.functionApp.dispose();
     }
 
     clickRow(item: FunctionNode) {
@@ -97,8 +106,8 @@ export class FunctionsListComponent implements OnDestroy {
 
                     this._functionsNode.removeChild(item.functionInfo, false);
 
-                    const defaultHostName = this._functionsNode.functionApp.site.properties.defaultHostName;
-                    const scmHostName = this._functionsNode.functionApp.site.properties.hostNameSslStates.find(s => s.hostType === 1).name;
+                    const defaultHostName = this.functionApp.site.properties.defaultHostName;
+                    const scmHostName = this.functionApp.site.properties.hostNameSslStates.find(s => s.hostType === 1).name;
 
                     item.sideNav.cacheService.clearCachePrefix(`https://${defaultHostName}`);
                     item.sideNav.cacheService.clearCachePrefix(`https://${scmHostName}`);

@@ -1,4 +1,3 @@
-import { FunctionApp } from './../shared/function-app';
 import { Observable } from 'rxjs/Observable';
 import 'rxjs/add/observable/of';
 import { AppNode } from './app-node';
@@ -22,7 +21,7 @@ export class FunctionNode extends TreeNode implements CanBlockNavChange, Disposa
         parentNode: TreeNode) {
 
         super(sideNav,
-            functionInfo.functionApp.site.id + '/functions/' + functionInfo.name,
+            functionInfo.context.site.id + '/functions/' + functionInfo.name,
             parentNode);
         this.iconClass = 'tree-node-svg-icon';
         this.iconUrl = 'image/function_f.svg';
@@ -140,7 +139,7 @@ export class FunctionIntegrateNode extends FunctionEditBaseNode {
 
         super(sideNav,
             functionInfo,
-            functionInfo.functionApp.site.id + '/functions/' + functionInfo.name + '/integrate',
+            functionInfo.context.site.id + '/functions/' + functionInfo.name + '/integrate',
             parentNode);
 
         this.iconClass = 'fa fa-flash tree-node-function-edit-icon link';
@@ -159,7 +158,7 @@ export class FunctionManageNode extends FunctionEditBaseNode implements Removabl
 
         super(sideNav,
             functionInfo,
-            functionInfo.functionApp.site.id + '/functions/' + functionInfo.name + '/manage',
+            functionInfo.context.site.id + '/functions/' + functionInfo.name + '/manage',
             parentNode);
 
         this.iconClass = 'fa fa-cog tree-node-function-edit-icon link';
@@ -168,12 +167,8 @@ export class FunctionManageNode extends FunctionEditBaseNode implements Removabl
     public remove() {
         this._functionsNode.removeChild(this.functionInfo, false);
 
-        this.sideNav.cacheService.clearCachePrefix(
-            FunctionApp.getMainUrl(this.sideNav.configService, this.functionInfo.functionApp.site));
-
-        this.sideNav.cacheService.clearCachePrefix(
-            FunctionApp.getScmUrl(this.sideNav.configService, this.functionInfo.functionApp.site));
-
+        this.sideNav.cacheService.clearCachePrefix(this.functionInfo.context.mainSiteUrl);
+        this.sideNav.cacheService.clearCachePrefix(this.functionInfo.context.scmUrl);
     }
 }
 
