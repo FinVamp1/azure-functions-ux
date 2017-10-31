@@ -175,6 +175,7 @@ export class ScenarioIds {
     public static readonly showCreateRefreshSub = 'ShowCreateRefreshSub';
     public static readonly enablePlatform64 = 'EnablePlatform64';
     public static readonly enableAlwaysOn = 'EnableAlwaysOn';
+    public static readonly enableAutoSwap = 'EnableAutoSwap';
 }
 
 export class ServerFarmSku {
