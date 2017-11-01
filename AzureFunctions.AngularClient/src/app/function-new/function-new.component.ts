@@ -1,4 +1,10 @@
-import { Component, ElementRef, Inject } from '@angular/core';
+import { FunctionsService, FunctionAppContext } from './../shared/services/functions-service';
+import { Observable } from 'rxjs/Observable';
+import { Site } from './../shared/models/arm/site';
+import { ArmObj } from './../shared/models/arm/arm-obj';
+import { SiteDescriptor } from './../shared/resourceDescriptors';
+import { CacheService } from 'app/shared/services/cache.service';
+import { Component, ElementRef, Inject, OnDestroy, Injector } from '@angular/core';
 import { Subject } from 'rxjs/Subject';
 import 'rxjs/add/operator/do';
 import 'rxjs/add/operator/retry';
@@ -32,7 +38,8 @@ import { Regex } from './../shared/models/constants';
     outputs: ['functionAdded'],
     inputs: ['viewInfoInput']
 })
-export class FunctionNewComponent {
+export class FunctionNewComponent implements OnDestroy {
+    private context: FunctionAppContext;
     private functionsNode: FunctionsNode;
     public functionApp: FunctionApp;
     public functionsInfo: FunctionInfo[];
@@ -71,17 +78,37 @@ export class FunctionNewComponent {
         private _portalService: PortalService,
         private _globalStateService: GlobalStateService,
         private _translateService: TranslateService,
-        private _aiService: AiService) {
+        private _aiService: AiService,
+        private _cacheService: CacheService,
+        private _functionsService: FunctionsService,
+        private _injector: Injector) {
+
         this.elementRef = elementRef;
         this.disabled = !!_broadcastService.getDirtyState("function_disabled");
 
         this._viewInfoStream
             .switchMap(viewInfo => {
-                this.viewInfo = viewInfo;
                 this._globalStateService.setBusyState();
+                this.viewInfo = viewInfo;
                 this.functionsNode = <FunctionsNode>viewInfo.node;
                 this.appNode = <AppNode>viewInfo.node.parent;
-                // this.functionApp = this.functionsNode.functionApp;
+
+                const descriptor = new SiteDescriptor(viewInfo.resourceId);
+                return Observable.zip(
+                    this._cacheService.getArm(descriptor.getTrimmedResourceId()),
+                    this._functionsService.getAppContext(descriptor.getTrimmedResourceId()),
+                    (s, c) =>({ siteResponse: s, context: c}))
+            })
+            .switchMap(r => {
+                const site: ArmObj<Site> = r.siteResponse.json();
+                this.context = r.context;
+
+                if (this.functionApp) {
+                    this.functionApp.dispose();
+                }
+
+                this.functionApp = new FunctionApp(site, this._injector);
+
                 if (this.functionsNode.action) {
                     this.action = Object.create(this.functionsNode.action);
                     delete this.functionsNode.action;
@@ -105,6 +132,12 @@ export class FunctionNewComponent {
 
     set viewInfoInput(viewInfoInput: TreeViewInfo<any>) {
         this._viewInfoStream.next(viewInfoInput);
+    }
+
+    ngOnDestroy() {
+        if (this.functionApp) {
+            this.functionApp.dispose();
+        }
     }
 
     onTemplatePickUpComplete(templateName: string) {
@@ -280,13 +313,18 @@ export class FunctionNewComponent {
 
         this._globalStateService.setBusyState();
         this.functionApp.createFunctionV2(this.functionName, this.selectedTemplate.files, this.bc.UIToFunctionConfig(this.model.config))
-            .subscribe(res => {
+            .subscribe(newFunctionInfo => {
                 this._portalService.logAction('new-function', 'success', { template: this.selectedTemplate.id, name: this.functionName });
                 this._aiService.trackEvent('new-function', { template: this.selectedTemplate.id, result: 'success', first: 'false' });
 
+                this._cacheService.clearCachePrefix(this.functionApp.getScmUrl());
+
+                newFunctionInfo.context = this.context;
+
                 // If someone refreshed the app, it would created a new set of child nodes under the app node.
                 this.functionsNode = <FunctionsNode>this.appNode.children.find(node => node.title === this.functionsNode.title);
-                this.functionsNode.addChild(res);
+                this.functionsNode.addChild(newFunctionInfo);
+                this._globalStateService.clearBusyState();
             },
             () => {
                 this._globalStateService.clearBusyState();

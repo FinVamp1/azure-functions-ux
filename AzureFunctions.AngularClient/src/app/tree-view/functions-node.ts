@@ -1,3 +1,4 @@
+import { CacheService } from 'app/shared/services/cache.service';
 import { FunctionDescriptor } from 'app/shared/resourceDescriptors';
 import { FunctionAppContext } from './../shared/services/functions-service';
 import { EditModeHelper } from './../shared/Utilities/edit-mode.helper';
@@ -22,6 +23,8 @@ export class FunctionsNode extends BaseFunctionsProxiesNode implements MutableCo
     public newDashboardType = DashboardType.CreateFunctionAutoDetectDashboard;
     public action: Action;
 
+    private _cacheService: CacheService;
+
     constructor(
         sideNav: SideNavComponent,
         context: FunctionAppContext,
@@ -31,6 +34,8 @@ export class FunctionsNode extends BaseFunctionsProxiesNode implements MutableCo
             context,
             parentNode,
             context.site.id + '/functions/new/function');
+
+        this._cacheService = sideNav.injector.get(CacheService);
 
         this.iconClass = 'tree-node-collection-icon';
         this.iconUrl = 'image/BulletList.svg';
@@ -71,9 +76,11 @@ export class FunctionsNode extends BaseFunctionsProxiesNode implements MutableCo
         // functionInfo.functionApp = this.functionApp;
         // this.sideNav.cacheService.clearCachePrefix(this.functionApp.getScmUrl());
 
-        // const newNode = new FunctionNode(this.sideNav, this, functionInfo, this);
-        // this._addChildAlphabetically(newNode);
-        // newNode.select();
+        this._cacheService.clearCachePrefix(functionInfo.context.urlTemplates.functionsUrl);
+
+        const newNode = new FunctionNode(this.sideNav, functionInfo, this);
+        this._addChildAlphabetically(newNode);
+        newNode.select();
     }
 
     public removeChild(resourceId: string, callRemoveOnChild?: boolean) {

@@ -28,7 +28,12 @@ export class NoCorsHttpService {
         }
 
         return this._cacheService.send(url, options.method as string, force, options.headers, options.body)
-            .catch(e => this.tryPassThroughController(e, options.method.toString(), url, options.body, options));
+            .catch(e => this.tryPassThroughController(e, options.method.toString(), url, options.body, options))
+            .do(() => {
+                if (options.method === 'PUT' || options.method === 'PATCH' || options.method === 'DELETE') {
+                    this._cacheService.clearCachePrefix(this._getBaseUrl(url));
+                }
+            });
     }
 
     /**
@@ -52,7 +57,10 @@ export class NoCorsHttpService {
      */
     put(url: string, body: any, options?: RequestOptionsArgs): Observable<Response> {
         return this._cacheService.put(url, options && options.headers ? options.headers : new Headers(), body)
-            .catch(e => this.tryPassThroughController(e, 'PUT', url, body, options));
+            .catch(e => this.tryPassThroughController(e, 'PUT', url, body, options))
+            .do(() => {
+                this._cacheService.clearCachePrefix(this._getBaseUrl(url));
+            });
     }
 
     /**
@@ -60,7 +68,10 @@ export class NoCorsHttpService {
      */
     delete(url: string, options?: RequestOptionsArgs): Observable<Response> {
         return this._cacheService.delete(url, options && options.headers ? options.headers : new Headers())
-            .catch(e => this.tryPassThroughController(e, 'DELETE', url, null, options));
+            .catch(e => this.tryPassThroughController(e, 'DELETE', url, null, options))
+            .do(() => {
+                this._cacheService.clearCachePrefix(this._getBaseUrl(url));
+            });
     }
 
     /**
@@ -68,7 +79,10 @@ export class NoCorsHttpService {
      */
     patch(url: string, body: any, options?: RequestOptionsArgs): Observable<Response> {
         return this._cacheService.patch(url, options && options.headers ? options.headers : new Headers())
-            .catch(e => this.tryPassThroughController(e, 'PATCH', url, null, options));
+            .catch(e => this.tryPassThroughController(e, 'PATCH', url, null, options))
+            .do(() => {
+                this._cacheService.clearCachePrefix(this._getBaseUrl(url));
+            });
     }
 
     /**
@@ -136,6 +150,16 @@ export class NoCorsHttpService {
                 });
         } else {
             throw error;
+        }
+    }
+
+    private _getBaseUrl(url: string) {
+        const l = document.createElement('a');
+        l.href = url;
+        if (url.toLowerCase().startsWith('https')) {
+            return `https://${l.hostname}`;
+        } else {
+            return `http://${l.hostname}`;
         }
     }
 }
