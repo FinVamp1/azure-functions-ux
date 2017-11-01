@@ -159,7 +159,7 @@ export class FunctionApp {
         this._configService = injector.get(ConfigService);
         this._slotsService = injector.get(SiteService);
 
-        this._http = new NoCorsHttpService(this._ngHttp, this._broadcastService, this._aiService, this._translateService, () => this.getPortalHeaders());
+        this._http = new NoCorsHttpService(this._cacheService, this._ngHttp, this._broadcastService, this._aiService, this._translateService, () => this.getPortalHeaders());
 
         if (!this._globalStateService.showTryView) {
             this._userService.getStartupInfo()
@@ -666,7 +666,10 @@ export class FunctionApp {
     deleteFunction(functionInfo: FunctionInfo) {
         return this._http.delete(functionInfo.href, { headers: this.getScmSiteHeaders() })
             .map(r => r.statusText)
-            .do(_ => this._broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.unableToDeleteFunction + functionInfo.name),
+            .do(_ => {
+                this._cacheService.clearCachePrefix(this.urlTemplates.functionsUrl);
+                this._broadcastService.broadcast<string>(BroadcastEvent.ClearError, ErrorIds.unableToDeleteFunction + functionInfo.name);
+            },
             (error: FunctionsResponse) => {
                 if (!error.isHandled) {
                     this._broadcastService.broadcast<ErrorEvent>(BroadcastEvent.Error, {
@@ -692,17 +695,11 @@ export class FunctionApp {
     }
 
     initKeysAndWarmupMainSite() {
-        const warmupSite = this._http.post(this.urlTemplates.pingUrl, '')
+        this._http.post(this.urlTemplates.pingUrl, '')
             .retryWhen(this.retryAntares)
-            .catch(() => Observable.of(null));
+            .subscribe(() =>{});
 
-        const observable = Observable.zip(
-            warmupSite,
-            this.getHostSecretsFromScm(),
-            (w: any, s: any) => ({ warmUp: w, secrets: s })
-        );
-
-        return observable;
+        return this.getHostSecretsFromScm();
     }
 
     @Cache('secrets_file_href')

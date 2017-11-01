@@ -1,3 +1,4 @@
+import { FunctionDescriptor } from 'app/shared/resourceDescriptors';
 import { FunctionAppContext } from './../shared/services/functions-service';
 import { EditModeHelper } from './../shared/Utilities/edit-mode.helper';
 import { Observable } from 'rxjs/Observable';
@@ -75,13 +76,29 @@ export class FunctionsNode extends BaseFunctionsProxiesNode implements MutableCo
         // newNode.select();
     }
 
-    public removeChild(functionInfo: FunctionInfo, callRemoveOnChild?: boolean) {
+    public removeChild(resourceId: string, callRemoveOnChild?: boolean) {
+
+        const descriptor = new FunctionDescriptor(resourceId);
+        resourceId = descriptor.getTrimmedResourceId();
+
+        const removeIndex = this.children.findIndex(c => c.resourceId.toLowerCase() === resourceId.toLowerCase());
+        this._removeHelper(removeIndex);
 
         // const removeIndex = this.children.findIndex((childNode: FunctionNode) => {
         //     return childNode.functionInfo.name === functionInfo.name;
         // });
 
         // this._removeHelper(removeIndex, callRemoveOnChild);
+    }
+
+    public updateChild(resourceId: string, disabled: boolean){
+        const descriptor = new FunctionDescriptor(resourceId);
+        resourceId = descriptor.getTrimmedResourceId();
+
+        const child = <FunctionNode>this.children.find(c => c.resourceId.toLowerCase() === resourceId.toLowerCase());
+        if(child){
+            child.functionInfo.config.disabled = disabled;
+        }
     }
 
     public openCreateDashboard(dashboardType: DashboardType, action?: Action) {
@@ -119,7 +136,7 @@ export class FunctionsNode extends BaseFunctionsProxiesNode implements MutableCo
                     const fcNodes = <FunctionNode[]>[];
                     fcs.forEach(fc => {
                         // fc.functionApp = this.functionApp;
-                        fcNodes.push(new FunctionNode(this.sideNav, this, fc, this))
+                        fcNodes.push(new FunctionNode(this.sideNav, fc, this));
                     });
 
                     this.children = fcNodes;

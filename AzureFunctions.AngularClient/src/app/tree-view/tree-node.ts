@@ -159,7 +159,6 @@ export class TreeNode implements Disposable, Removable, CanBlockNavChange, Custo
                 this.sideNav.aiService.trackException(e, '/errors/tree-node/expand-single/load-children');
             })
             .subscribe(() => {
-                // this.isLoading = false;
                 if (this.children && this.children.length > 0) {
                     const matchingChild = this.children.find(c => {
                         return this.sideNav.initialResourceId && this.sideNav.initialResourceId.toLowerCase().startsWith(`${this.resourceId}/${c.title}`.toLowerCase());

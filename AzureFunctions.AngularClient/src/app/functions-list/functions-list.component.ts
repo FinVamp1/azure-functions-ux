@@ -42,14 +42,18 @@ export class FunctionsListComponent implements OnDestroy {
             .filter(viewInfo => viewInfo.dashboardType === DashboardType.FunctionsDashboard)
             .takeUntil(this._ngUnsubscribe)
             .distinctUntilChanged()
-            .switchMap(viewInfo =>{
+            .switchMap(viewInfo => {
                 this.isLoading = true;
                 this._functionsNode = (<FunctionsNode>viewInfo.node);
                 this.appNode = (<AppNode>viewInfo.node.parent);
                 const descriptor = new SiteDescriptor(viewInfo.resourceId);
-                return this._functionsService.getAppContext(descriptor.getResourceId());
+                return this._functionsService.getAppContext(descriptor.getTrimmedResourceId());
             })
             .switchMap(context => {
+                if (this.functionApp) {
+                    this.functionApp.dispose();
+                }
+
                 this.functionApp = new FunctionApp(context.site, this._injector);
                 return this._functionsNode.loadChildren();
             })
@@ -104,7 +108,8 @@ export class FunctionsListComponent implements OnDestroy {
                         this.functions.splice(indexToDelete, 1);
                     }
 
-                    this._functionsNode.removeChild(item.functionInfo, false);
+                    const resourceId = `${this._functionsNode.resourceId}/${item.functionInfo.name}`;
+                    this._functionsNode.removeChild(resourceId, false);
 
                     const defaultHostName = this.functionApp.site.properties.defaultHostName;
                     const scmHostName = this.functionApp.site.properties.hostNameSslStates.find(s => s.hostType === 1).name;

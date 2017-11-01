@@ -1,3 +1,9 @@
+import { DashboardType } from 'app/tree-view/models/dashboard-type';
+import { TreeUpdateEvent } from './../shared/models/broadcast-event';
+import { BroadcastEvent } from 'app/shared/models/broadcast-event';
+import { BroadcastService } from 'app/shared/services/broadcast.service';
+import { Subscription as RxSubscription } from 'rxjs/Subscription';
+import { Subject } from 'rxjs/Subject';
 import { FunctionsService } from './../shared/services/functions-service';
 import { LogCategories } from 'app/shared/models/constants';
 import { LogService } from './../shared/services/log.service';
@@ -5,9 +11,7 @@ import { CacheService } from './../shared/services/cache.service';
 import { ScenarioService } from './../shared/services/scenario/scenario.service';
 import { SiteTabIds, ScenarioIds } from './../shared/models/constants';
 import { SiteService } from './../shared/services/slots.service';
-// import { Response } from '@angular/http';
 import { Observable } from 'rxjs/Observable';
-import { Subscription as RxSubscription } from 'rxjs/Subscription';
 import { ReplaySubject } from 'rxjs/ReplaySubject';
 import 'rxjs/add/operator/catch';
 import 'rxjs/add/operator/concatMap';
@@ -24,17 +28,16 @@ import { PortalResources } from './../shared/models/portal-resources';
 // import { ErrorIds } from './../shared/models/error-ids';
 // import { TopBarNotification } from './../top-bar/top-bar-models';
 import { ArmObj } from './../shared/models/arm/arm-obj';
-import { Subscription } from './../shared/models/subscription';
 import { SiteDescriptor } from './../shared/resourceDescriptors';
 import { AppsNode } from './apps-node';
 import { TreeNode, Disposable, Removable, CustomSelection, Collection, Refreshable, CanBlockNavChange } from './tree-node';
-import { DashboardType } from './models/dashboard-type';
 import { SideNavComponent } from '../side-nav/side-nav.component';
 import { Site } from '../shared/models/arm/site';
 import { SlotsNode } from './slots-node';
 import { FunctionsNode } from './functions-node';
 import { ProxiesNode } from './proxies-node';
 import { FunctionApp } from '../shared/function-app';
+import { Subscription } from 'app/shared/models/subscription';
 // import { Constants, NotificationIds } from '../shared/models/constants';
 // import { BroadcastEvent } from '../shared/models/broadcast-event';
 // import { ErrorEvent, ErrorType } from '../shared/models/error-event';
@@ -60,19 +63,19 @@ export class AppNode extends TreeNode
 
     public functionAppStream = new ReplaySubject<FunctionApp>(1);
     public slotProperties: any;
-    private _functionApp: FunctionApp;
     public openTabId: string | null;
 
     public iconClass = 'tree-node-svg-icon';
     public iconUrl = 'image/functions.svg';
 
-    private _pollingTask: RxSubscription;
-    private _loadingObservable: Observable<any>;
+    private _treeUpdateSubscription: RxSubscription;
+    private _ngUnsubscribe = new Subject();
 
     private _functionsService: FunctionsService;
     private _scenarioService: ScenarioService;
     private _cacheService: CacheService;
     private _logService: LogService;
+    private _broadcastService: BroadcastService;
 
     constructor(sideBar: SideNavComponent,
         private _siteArmCacheObj: ArmObj<Site>,
@@ -85,6 +88,7 @@ export class AppNode extends TreeNode
         this._scenarioService = this.sideNav.injector.get(ScenarioService);
         this._cacheService = this.sideNav.injector.get(CacheService);
         this._logService = this.sideNav.injector.get(LogService);
+        this._broadcastService = this.sideNav.injector.get(BroadcastService);
 
         this.disabled = !!disabled;
         if (disabled) {
@@ -107,18 +111,34 @@ export class AppNode extends TreeNode
         this.subscriptionId = sub && sub.subscriptionId;
     }
 
-    // public handleSelection(): Observable<any> {
+    public handleSelection(): Observable<any> {
+        if (!this._treeUpdateSubscription) {
+            this._treeUpdateSubscription = this._broadcastService.getEvents<TreeUpdateEvent>(BroadcastEvent.TreeUpdate)
+                .takeUntil(this._ngUnsubscribe)
+                .subscribe(event => {
+                    if (event.dashboardType === DashboardType.FunctionDashboard) {
 
+                        const functionsNode = <FunctionsNode>this.children.find(c => c.dashboardType === DashboardType.FunctionsDashboard);
+                        if (event.operation === 'delete') {
+                            functionsNode.removeChild(event.resourceId);
+                        } else if(event.operation === 'update'){
+                            functionsNode.updateChild(event.resourceId, event.data);
+                        }
+                    }
+                });
+        }
 
-    //     return Observable.of({});
-    // }
+        return Observable.of({});
+    }
 
     public loadChildren() {
 
+        this.supportsRefresh = false;
         this.isLoading = true;
         return this._functionsService.getAppContext(this.resourceId)
             .do(context => {
                 this.isLoading = false;
+                this.supportsRefresh = true;
 
                 const children = [
                     new FunctionsNode(this.sideNav, context, this),
@@ -139,79 +159,16 @@ export class AppNode extends TreeNode
                 });
 
             }, err => {
+                this.supportsRefresh = true;
                 this.isLoading = false;
                 this._logService.error(LogCategories.SideNav, '/app-node/loadChildren', err);
-            });
-
-        // return Observable.of({});
+            })
+            .map(context => context);
     }
 
     public initialize(expandOnly?: boolean): Observable<any> {
 
         return Observable.of({});
-
-        // if (!expandOnly) {
-        //     this.inSelectedTree = true;
-        // }
-
-        // this.supportsRefresh = false;
-        // this.isLoading = true;
-
-        // if (this._loadingObservable) {
-        //     return this._loadingObservable;
-        // }
-
-        // this._loadingObservable = Observable.zip(
-        //     this.sideNav.authZService.hasPermission(this._siteArmCacheObj.id, [AuthzService.writeScope]),
-        //     this.sideNav.authZService.hasReadOnlyLock(this._siteArmCacheObj.id),
-        //     this.sideNav.cacheService.getArm(this._siteArmCacheObj.id),
-
-        //     (h, r, s) => ({ hasWritePermission: h, hasReadOnlyLock: r, siteResponse: s })
-        // )
-        //     .mergeMap(r => {
-        //         const site: ArmObj<Site> = r.siteResponse.json();
-
-        //         if (!this._functionApp) {
-        //             return this._setupFunctionApp(site)
-        //                 .mergeMap(() => {
-        //                     if (site.properties.state === 'Running' && r.hasWritePermission && !r.hasReadOnlyLock) {
-        //                         return this._setupBackgroundTasks()
-        //                             .map(() => {
-        //                                 this.supportsRefresh = true;
-        //                             });
-        //                     } else {
-        //                         this.dispose();
-        //                         this.supportsRefresh = true;
-        //                         return Observable.of(null);
-        //                     }
-        //                 });
-        //         }
-
-        //         this.supportsRefresh = true;
-        //         return Observable.of(null);
-        //     })
-        //     .do(() => {
-        //         // Temporary workaround to make sure we clear loading
-        //         // https://github.com/Azure/azure-functions-ux/issues/1872
-        //         setTimeout(() => {
-        //             this.isLoading = false;
-        //         });
-
-        //         if (this.inSelectedTree) {
-        //             this.children.forEach(c => c.inSelectedTree = true);
-        //         }
-
-        //         this._loadingObservable = null;
-        //     }, () => {
-        //         // Temporary workaround to make sure we clear loading
-        //         // https://github.com/Azure/azure-functions-ux/issues/1872
-        //         setTimeout(() => {
-        //             this.isLoading = false;
-        //         });
-        //     })
-        //     .share();
-
-        // return this._loadingObservable;
     }
 
     public shouldBlockNavChange() {
@@ -221,7 +178,7 @@ export class AppNode extends TreeNode
         if (isDirty) {
             canSwitchNodes = confirm(
                 this.sideNav.translateService.instant(
-                    PortalResources.siteDashboard_confirmLoseChanges).format(this._functionApp.site.name));
+                    PortalResources.siteDashboard_confirmLoseChanges).format(this._siteArmCacheObj.name));
 
             if (canSwitchNodes) {
                 this.sideNav.broadcastService.clearAllDirtyStates();
@@ -231,85 +188,21 @@ export class AppNode extends TreeNode
         return !canSwitchNodes;
     }
 
-    // private _setupFunctionApp(site: ArmObj<Site>) {
-    //     let result = Observable.of(null);
-
-    // if (this.sideNav.tryFunctionApp) {
-    //     this._functionApp = this.sideNav.tryFunctionApp;
-
-    //     const functionsNode = new FunctionsNode(this.sideNav, this._functionApp, this);
-    //     functionsNode.toggle(null);
-    //     this.children = [functionsNode];
-    // } else {
-    //     this._functionApp = new FunctionApp(
-    //         site,
-    //         this.sideNav.http,
-    //         this.sideNav.userService,
-    //         this.sideNav.globalStateService,
-    //         this.sideNav.translateService,
-    //         this.sideNav.broadcastService,
-    //         this.sideNav.armService,
-    //         this.sideNav.cacheService,
-    //         this.sideNav.languageService,
-    //         this.sideNav.authZService,
-    //         this.sideNav.aiService,
-    //         this.sideNav.configService,
-    //         this.sideNav.slotsService
-    //     );
-
-    //     const postFunctionApp = () => {
-    //         this.functionAppStream.next(this._functionApp);
-
-    //         const functionsNode = new FunctionsNode(this.sideNav, this._functionApp, this);
-    //         functionsNode.toggle(null);
-    //         this.children = [functionsNode];
-
-    //         if (!this.sideNav.configService.isStandalone()) {
-    //             const proxiesNode = new ProxiesNode(this.sideNav, this._functionApp, this);
-    //             const slotsNode = new SlotsNode(this.sideNav, this._subscriptions, this._siteArmCacheObj, this);
-    //             proxiesNode.toggle(null);
-    //             // Do not auto expand slotsNode
-    //             // for slots Node hide the slots as child Node
-    //             if (this.isSlot) {
-    //                 this.supportsScope = false;
-    //                 this.children.push(proxiesNode);
-    //             } else {
-    //                 this.supportsScope = true;
-    //                 this.children.push(proxiesNode, slotsNode);
-    //             }
-    //         }
-    //     };
-
-    //     if (ArmUtil.isLinuxApp(this._functionApp.site)) {
-    //         result = this._functionApp.getHostSecretsFromScm().do(() => postFunctionApp());
-    //     } else {
-    //         postFunctionApp();
-    //     }
-    // }
-
-    //     return result;
-    // }
-
     public handleRefresh(): Observable<any> {
         if (this.sideNav.selectedNode.shouldBlockNavChange()) {
             return Observable.of(null);
         }
 
-        // Make sure there isn't a load operation currently being performed
-        const loadObs = this._loadingObservable ? this._loadingObservable : Observable.of({});
-        return loadObs
-            .mergeMap(() => {
-                this.sideNav.aiService.trackEvent('/actions/refresh');
-                this._functionApp.fireSyncTrigger();
-                this.sideNav.cacheService.clearCache();
-                this.dispose();
-                this._functionApp = null;
-                this.functionAppStream.next(null);
+        // Don't need to check for existing loadChildren operations because the refresh button shouldn't
+        // be visible during load.
+        this.sideNav.aiService.trackEvent('/actions/refresh');
+        this.sideNav.cacheService.clearCache();
+        // this.dispose();
+        this.functionAppStream.next(null);
 
-                return this.initialize();
-            })
-            .do(() => {
-                this.isLoading = false;
+        return this.loadChildren()
+            .do(context => {
+                this._functionsService.fireSyncTrigger(context);
                 if (this.children && this.children.length === 1 && !this.children[0].isExpanded) {
                     this.children[0].toggle(null);
                 }
@@ -345,13 +238,10 @@ export class AppNode extends TreeNode
         this.inSelectedTree = false;
         this.children.forEach(c => c.inSelectedTree = false);
 
-        if (this._loadingObservable) {
-            this._loadingObservable.subscribe(() => {
-                this._dispose();
-            });
-        } else {
-            this._dispose();
-        }
+        this.sideNav.globalStateService.setTopBarNotifications([]);
+        this.sideNav.broadcastService.clearAllDirtyStates();
+
+        this._ngUnsubscribe.next();
     }
 
     public clearNotification(id: string) {
@@ -366,20 +256,6 @@ export class AppNode extends TreeNode
     public openSettings() {
         this.openTabId = SiteTabIds.functionRuntime;
         this.select(true /* force */);
-    }
-
-    private _dispose() {
-        if (this._pollingTask && !this._pollingTask.closed) {
-            this._pollingTask.unsubscribe();
-            this._pollingTask = null;
-        }
-
-        if (this._functionApp) {
-            this._functionApp.isDeleted = true;
-        }
-
-        this.sideNav.globalStateService.setTopBarNotifications([]);
-        this.sideNav.broadcastService.clearAllDirtyStates();
     }
 
     // private _setupBackgroundTasks() {

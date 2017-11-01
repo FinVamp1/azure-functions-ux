@@ -3,7 +3,6 @@ import 'rxjs/add/observable/of';
 import { AppNode } from './app-node';
 import { FunctionDescriptor } from './../shared/resourceDescriptors';
 import { TreeNode, Removable, CanBlockNavChange, Disposable, CustomSelection } from './tree-node';
-import { FunctionsNode } from './functions-node';
 import { SideNavComponent } from '../side-nav/side-nav.component';
 import { DashboardType } from './models/dashboard-type';
 import { PortalResources } from '../shared/models/portal-resources';
@@ -16,7 +15,6 @@ export class FunctionNode extends TreeNode implements CanBlockNavChange, Disposa
 
     constructor(
         sideNav: SideNavComponent,
-        private _functionsNode: FunctionsNode,
         public functionInfo: FunctionInfo,
         parentNode: TreeNode) {
 
@@ -53,7 +51,7 @@ export class FunctionNode extends TreeNode implements CanBlockNavChange, Disposa
     public loadChildren() {
         this.children = [
             new FunctionIntegrateNode(this.sideNav, this.functionInfo, this),
-            new FunctionManageNode(this.sideNav, this._functionsNode, this.functionInfo, this),
+            new FunctionManageNode(this.sideNav, this.functionInfo, this),
         ];
 
         if (!this.sideNav.configService.isStandalone()) {
@@ -152,7 +150,7 @@ export class FunctionManageNode extends FunctionEditBaseNode implements Removabl
 
     constructor(
         sideNav: SideNavComponent,
-        private _functionsNode: FunctionsNode,
+        // private _functionsNode: FunctionsNode,
         functionInfo: FunctionInfo,
         parentNode: TreeNode) {
 
@@ -164,12 +162,12 @@ export class FunctionManageNode extends FunctionEditBaseNode implements Removabl
         this.iconClass = 'fa fa-cog tree-node-function-edit-icon link';
     }
 
-    public remove() {
-        this._functionsNode.removeChild(this.functionInfo, false);
+    // public remove() {
+    //     this._functionsNode.removeChild(this.functionInfo, false);
 
-        this.sideNav.cacheService.clearCachePrefix(this.functionInfo.context.mainSiteUrl);
-        this.sideNav.cacheService.clearCachePrefix(this.functionInfo.context.scmUrl);
-    }
+    //     this.sideNav.cacheService.clearCachePrefix(this.functionInfo.context.mainSiteUrl);
+    //     this.sideNav.cacheService.clearCachePrefix(this.functionInfo.context.scmUrl);
+    // }
 }
 
 export class FunctionMonitorNode extends FunctionEditBaseNode {
@@ -183,7 +181,7 @@ export class FunctionMonitorNode extends FunctionEditBaseNode {
 
         super(sideNav,
             functionInfo,
-            functionInfo.functionApp.site.id + '/functions/' + functionInfo.name + '/monitor',
+            functionInfo.context.site.id + '/functions/' + functionInfo.name + '/monitor',
             parentNode);
 
         this.iconClass = 'fa fa-search tree-node-function-edit-icon link';

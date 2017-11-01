@@ -240,7 +240,7 @@ export class SideNavComponent implements AfterViewInit {
                 }
 
                 this.selectedNode.dispose(newSelectedNode);
-                this.globalStateService.clearBusyState();
+                // this.globalStateService.clearBusyState();
             }
         }
 

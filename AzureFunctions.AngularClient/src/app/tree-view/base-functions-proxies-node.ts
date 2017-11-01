@@ -46,7 +46,7 @@ export abstract class BaseFunctionsProxiesNode extends TreeNode {
 
     protected abstract _updateTreeForNonUsableState(title: string);
 
-    public baseLoadChildren(workingTitles: WorkingTitles, errorTitles: ErrorTitles) {
+    public baseLoadChildren(workingTitles: WorkingTitles, errorTitles: ErrorTitles): Observable<any> {
         if (this._context.site.properties.state === 'Running') {
             this.isLoading = true;
             return Observable.zip(

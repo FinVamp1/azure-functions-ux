@@ -139,7 +139,7 @@ export class MainComponent implements AfterViewInit, OnDestroy {
                 // get list of functions from function app listed in resourceID
                 const siteDescriptor: SiteDescriptor = new SiteDescriptor(info.resourceId);
 
-                this._cacheService.getArm(siteDescriptor.getResourceId())
+                this._cacheService.getArm(siteDescriptor.getTrimmedResourceId())
                     .mergeMap(response => {
                         const site = <ArmObj<Site>>response.json();
                         const functionApp: FunctionApp = new FunctionApp(site, this._injector);

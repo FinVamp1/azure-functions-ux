@@ -81,7 +81,7 @@ export class FunctionNewComponent {
                 this._globalStateService.setBusyState();
                 this.functionsNode = <FunctionsNode>viewInfo.node;
                 this.appNode = <AppNode>viewInfo.node.parent;
-                this.functionApp = this.functionsNode.functionApp;
+                // this.functionApp = this.functionsNode.functionApp;
                 if (this.functionsNode.action) {
                     this.action = Object.create(this.functionsNode.action);
                     delete this.functionsNode.action;

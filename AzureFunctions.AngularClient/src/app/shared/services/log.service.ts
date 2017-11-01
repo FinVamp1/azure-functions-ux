@@ -38,7 +38,7 @@ export class LogService {
             throw Error('You must provide a category, id, and data');
         }
 
-        const errorId = `/errors${id}`;
+        const errorId = `/errors/${category}/${id}`;
 
         // Always log errors to App Insights
         this._aiService.trackEvent(errorId, data);
@@ -53,7 +53,7 @@ export class LogService {
             throw Error('You must provide a category, id, and data');
         }
 
-        const warningId = `/warnings${id}`;
+        const warningId = `/warnings/${category}/${id}`;
 
         // Always log warnings to App Insights
         this._aiService.trackEvent(warningId, data);

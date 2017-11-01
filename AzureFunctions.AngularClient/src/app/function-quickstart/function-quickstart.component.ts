@@ -52,7 +52,7 @@ export class FunctionQuickstartComponent {
             .switchMap(viewInfo => {
                 this._globalStateService.setBusyState();
                 this.functionsNode = <FunctionsNode>viewInfo.node;
-                this.functionApp = this.functionsNode.functionApp;
+                // this.functionApp = this.functionsNode.functionApp;
 
                 return this.functionApp.getFunctions();
             })

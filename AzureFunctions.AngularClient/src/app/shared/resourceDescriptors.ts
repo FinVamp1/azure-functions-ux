@@ -20,20 +20,24 @@ export class Descriptor {
         this.parts = resourceId.split('/').filter(part => !!part);
 
         if (this.parts.length < 4) {
-            throw `resourceId length is too short: ${resourceId}`;
+            throw Error(`resourceId length is too short: ${resourceId}`);
         }
 
         if (this.parts[0].toLowerCase() !== 'subscriptions') {
-            throw `Expected subscriptions segment in resourceId: ${resourceId}`;
+            throw Error(`Expected subscriptions segment in resourceId: ${resourceId}`);
         }
 
         if (this.parts[2].toLowerCase() !== 'resourcegroups') {
-            throw `Expected resourceGroups segment in resourceId: ${resourceId}`;
+            throw Error(`Expected resourceGroups segment in resourceId: ${resourceId}`);
         }
 
         this.subscription = this.parts[1];
         this.resourceGroup = this.parts[3];
     }
+
+    getTrimmedResourceId() {
+        return this.resourceId;
+    };
 
     static getDescriptor(resourceId: string) {
         let parts = resourceId.split('/').filter(part => !!part);
@@ -58,26 +62,26 @@ export class SiteDescriptor extends Descriptor {
         super(resourceId);
 
         if (this.parts.length < 8) {
-            throw `resourceId length is too short for site descriptor: ${resourceId}`;
+            throw Error(`resourceId length is too short for site descriptor: ${resourceId}`);
         }
 
         if (this.parts[6].toLowerCase() !== 'sites') {
-            throw `Expected sites segment in resourceId: ${resourceId}`;
+            throw Error(`Expected sites segment in resourceId: ${resourceId}`);
         }
 
         this.site = this.parts[7];
 
-        if (this.parts.length > 8 && this.parts[8].toLowerCase() === "slots") {
+        if (this.parts.length > 8 && this.parts[8].toLowerCase() === 'slots') {
             this.slot = this.parts[9];
             this.resourceType = ResourceType.slot;
         }
     }
 
-    getSiteOnlyResourceId() : string{
+    getSiteOnlyResourceId(): string {
         return `/subscriptions/${this.subscription}/resourceGroups/${this.resourceGroup}/providers/Microsoft.Web/sites/${this.site}`;
     }
 
-    getResourceId() : string{
+    getTrimmedResourceId(): string {
         // resource id without slot information
         let resource = this.getSiteOnlyResourceId();
         // add slots if available
@@ -87,8 +91,8 @@ export class SiteDescriptor extends Descriptor {
         return resource;
     }
 
-    getWebsiteId() : WebsiteId{
-        if(!this._websiteId){
+    getWebsiteId(): WebsiteId {
+        if (!this._websiteId) {
             let name = !this.slot ? this.site : `${this.site}(${this.slot})`;
             this._websiteId = {
                 Name: name,
@@ -101,14 +105,14 @@ export class SiteDescriptor extends Descriptor {
     }
 
     public static getSiteDescriptor(resourceId: string): SiteDescriptor {
-        let parts = resourceId.split("/").filter(part => !!part);
-        let siteId = "";
+        let parts = resourceId.split('/').filter(part => !!part);
+        let siteId = '';
         let maxIndex: number;
 
-        if (parts.length >= 10 && parts[8].toLowerCase() === "slots") {
+        if (parts.length >= 10 && parts[8].toLowerCase() === 'slots') {
             maxIndex = 9;
         }
-        else if (parts.length >= 8 && parts[6].toLowerCase() === "sites") {
+        else if (parts.length >= 8 && parts[6].toLowerCase() === 'sites') {
             maxIndex = 7;
         }
         else {
@@ -116,7 +120,7 @@ export class SiteDescriptor extends Descriptor {
         }
 
         for (let i = 0; i <= maxIndex; i++) {
-            siteId = siteId + "/" + parts[i];
+            siteId = siteId + '/' + parts[i];
         }
 
         return new SiteDescriptor(siteId);
@@ -130,15 +134,19 @@ export class FunctionDescriptor extends Descriptor {
         super(resourceId);
 
         if (this.parts.length < 10) {
-            throw "Not enough segments in function id";
+            throw Error('Not enough segments in function id');
         }
 
-        if ((this.parts[6].toLowerCase() !== "sites" || this.parts[8].toLowerCase() !== "functions")
-            && (this.parts[6].toLowerCase() !== "sites" || this.parts[8].toLowerCase() !== "proxies")) {
-            throw "Not a function/proxy id";
+        if ((this.parts[6].toLowerCase() !== 'sites' || this.parts[8].toLowerCase() !== 'functions')
+            && (this.parts[6].toLowerCase() !== 'sites' || this.parts[8].toLowerCase() !== 'proxies')) {
+            throw Error('Not a function/proxy id');
         }
 
         this.functionName = this.parts[9];
     }
 
+    getTrimmedResourceId() {
+        const descriptor = new SiteDescriptor(this.resourceId);
+        return descriptor.getTrimmedResourceId() + '/functions/' + this.functionName;
+    }
 }
